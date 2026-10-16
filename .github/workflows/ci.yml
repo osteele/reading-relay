@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: 'latest'
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run pyright
+      - run: uv run pytest -q
+      - name: Seed a private packaging canary
+        run: >-
+          uv run python -c "from pathlib import Path;
+          Path('private-build-canary.txt').write_text('Must not ship', encoding='utf-8')"
+      - run: uv build
+      - name: Verify source-distribution boundary
+        run: >-
+          uv run python -c "import tarfile; from pathlib import Path;
+          archive=tarfile.open(next(Path('dist').glob('*.tar.gz')));
+          names=archive.getnames(); archive.close();
+          assert any(n.endswith('/src/reading_relay/cli.py') for n in names);
+          assert not any(n.endswith('/private-build-canary.txt') or '/.claude/' in n for n in names);
+          Path('private-build-canary.txt').unlink()"
+      - run: uv run reading-relay --help
+      - name: Exercise installed CLI without an LLM or iCloud
+        run: >-
+          uv run reading-relay --config "${{ runner.temp }}/relay/config.toml" init
+          --reading-dir "${{ runner.temp }}/relay/Reading"
+          --data-dir "${{ runner.temp }}/relay/data"
+          --state-dir "${{ runner.temp }}/relay/state"
+          --cache-dir "${{ runner.temp }}/relay/cache"
+      - run: uv run reading-relay --config "${{ runner.temp }}/relay/config.toml" run --reconcile-only
+      - name: Verify the configured ledger location
+        run: >-
+          uv run python -c "import os; from pathlib import Path;
+          assert (Path(os.environ['RUNNER_TEMP']) / 'relay/data/ledger.sqlite3').is_file()"

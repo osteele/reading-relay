@@ -1,0 +1,52 @@
+[project]
+name = "reading-relay"
+version = "0.1.0"
+description = "A small, persistent research reading queue for iCloud and iPad"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Oliver Steele"}]
+dependencies = [
+    "pypdf>=5",
+    "fpdf2>=2.8",
+    "filelock>=3.16",
+]
+
+[project.urls]
+Repository = "https://github.com/osteele/reading-relay"
+Documentation = "https://github.com/osteele/reading-relay#readme"
+
+[project.scripts]
+reading-relay = "reading_relay.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.11", "pyright>=1.1"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+
+[tool.hatch.build.targets.sdist]
+# Allow only public project inputs into source distributions.
+include = [
+    "/src",
+    "/tests",
+    "/documents",
+    "/skills",
+    "/INSTALL.md",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/justfile",
+    "/.gitignore",
+    "/.github/workflows/ci.yml",
+]
